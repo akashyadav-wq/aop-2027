@@ -28,10 +28,16 @@
     --tag-ccm:#7a5ea8;
     --tag-ccm-bg:#ede7f6;
     --formula:#0f8a6b;
-    --cf-pos-bg:#e4f5ea;
-    --cf-pos-text:#1c7a43;
-    --cf-neg-bg:#fbe9e7;
-    --cf-neg-text:#b3372b;
+    --cf-high-bg:#1c7a43;
+    --cf-high-text:#ffffff;
+    --cf-med-bg:#8fd6ab;
+    --cf-med-text:#0f4a28;
+    --cf-low-bg:#e4f5ea;
+    --cf-low-text:#1c7a43;
+    --cf-neg-bg:#c2392c;
+    --cf-neg-text:#ffffff;
+    --cf-negneg-bg:#7a140c;
+    --cf-negneg-text:#ffffff;
     --shadow:0 10px 30px -12px rgba(15,31,54,.18);
     --row-alt:#f7f9fc;
   }
@@ -57,10 +63,16 @@
       --tag-ccm:#b79ae0;
       --tag-ccm-bg:#241c3a;
       --formula:#3fcba3;
-      --cf-pos-bg:#123524;
-      --cf-pos-text:#5fd98f;
+      --cf-high-bg:#0f3d22;
+      --cf-high-text:#7dffb0;
+      --cf-med-bg:#123524;
+      --cf-med-text:#5fd98f;
+      --cf-low-bg:#0d2a1c;
+      --cf-low-text:#3fae72;
       --cf-neg-bg:#3a1a18;
       --cf-neg-text:#f08a7d;
+      --cf-negneg-bg:#4a1210;
+      --cf-negneg-text:#ff6a56;
       --shadow:0 10px 30px -12px rgba(0,0,0,.5);
       --row-alt:#0d1a2c;
     }
@@ -86,10 +98,16 @@
     --tag-ccm:#b79ae0;
     --tag-ccm-bg:#241c3a;
     --formula:#3fcba3;
-    --cf-pos-bg:#123524;
-    --cf-pos-text:#5fd98f;
+    --cf-high-bg:#0f3d22;
+    --cf-high-text:#7dffb0;
+    --cf-med-bg:#123524;
+    --cf-med-text:#5fd98f;
+    --cf-low-bg:#0d2a1c;
+    --cf-low-text:#3fae72;
     --cf-neg-bg:#3a1a18;
     --cf-neg-text:#f08a7d;
+    --cf-negneg-bg:#4a1210;
+    --cf-negneg-text:#ff6a56;
     --shadow:0 10px 30px -12px rgba(0,0,0,.5);
     --row-alt:#0d1a2c;
   }
@@ -180,21 +198,22 @@
   td.editable{cursor:text; position:relative; color:var(--accent); font-weight:600;}
   td.editable:hover{background:var(--accent-soft); box-shadow:inset 0 0 0 1.5px var(--accent);}
   td.computed{color:var(--formula);}
-  /* conditional formatting — growth/delta columns get a background tint by sign, applied
-     to the column's cells directly rather than just coloring the number */
-  td.cf-pos{background:var(--cf-pos-bg); color:var(--cf-pos-text);}
+  /* conditional formatting — % growth columns get a 5-tier dark-to-light background tint by
+     growth magnitude, applied to the cell directly rather than just coloring the number */
+  td.cf-high{background:var(--cf-high-bg); color:var(--cf-high-text);}
+  td.cf-med{background:var(--cf-med-bg); color:var(--cf-med-text);}
+  td.cf-low{background:var(--cf-low-bg); color:var(--cf-low-text);}
   td.cf-neg{background:var(--cf-neg-bg); color:var(--cf-neg-text);}
-  /* three-tier, not two: flat/zero growth gets its own amber tier (reuses the grand-total's
-     amber token — same "hold steady" language already used elsewhere on this page) rather
-     than silently falling back to no color at all */
-  td.cf-neutral{background:var(--amber-bg); color:var(--amber);}
+  td.cf-negneg{background:var(--cf-negneg-bg); color:var(--cf-negneg-text);}
   /* conditional formatting must still show on campus/program/grand totals — these rows
      otherwise set their own flat background, which would silently hide the tint */
-  tbody tr.is-total td.cf-pos{background:var(--cf-pos-bg); color:var(--cf-pos-text);}
+  tbody tr.is-total td.cf-high{background:var(--cf-high-bg); color:var(--cf-high-text);}
+  tbody tr.is-total td.cf-med{background:var(--cf-med-bg); color:var(--cf-med-text);}
+  tbody tr.is-total td.cf-low{background:var(--cf-low-bg); color:var(--cf-low-text);}
   tbody tr.is-total td.cf-neg{background:var(--cf-neg-bg); color:var(--cf-neg-text);}
-  tbody tr.is-total td.cf-neutral{background:var(--amber-bg); color:var(--amber);}
+  tbody tr.is-total td.cf-negneg{background:var(--cf-negneg-bg); color:var(--cf-negneg-text);}
   /* Total Sunstone (grand row) deliberately excluded — its existing amber styling (higher
-     specificity than the base td.cf-pos/neg rules) wins back automatically */
+     specificity than the base td.cf-* rules) wins back automatically */
   td.editing{padding:3px 6px;}
   td.editing input{
     width:100%; text-align:right; font-family:"IBM Plex Mono",monospace; font-size:12.5px;
@@ -1168,13 +1187,16 @@ const RAW_DATA = {"columns": [{"idx": 6, "group": "2025", "sub": "2025", "metric
           td.classList.add("computed");
         }
         // conditional formatting on the column itself (cell background), not just text —
-        // every growth/delta metric gets the same red-down / green-up tint, whichever
-        // row or view it shows up in
+        // every % growth metric gets a 5-tier dark-to-light tint by magnitude: strong growth
+        // darkest green, fading to the palest green near 0%, then red for any degrowth,
+        // darkest red for the steepest degrowth
         if(GROWTH_FORMULAS[c.idx] && cell.val !== null){
           const n = parseNum(cell.val);
-          if(n > 0) td.classList.add("cf-pos");
-          else if(n < 0) td.classList.add("cf-neg");
-          else td.classList.add("cf-neutral");
+          if(n >= 30) td.classList.add("cf-high");
+          else if(n >= 10) td.classList.add("cf-med");
+          else if(n >= 0) td.classList.add("cf-low");
+          else if(n >= -20) td.classList.add("cf-neg");
+          else td.classList.add("cf-negneg");
         }
         tr.appendChild(td);
       });
