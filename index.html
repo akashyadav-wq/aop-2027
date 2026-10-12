@@ -184,10 +184,15 @@
      to the column's cells directly rather than just coloring the number */
   td.cf-pos{background:var(--cf-pos-bg); color:var(--cf-pos-text);}
   td.cf-neg{background:var(--cf-neg-bg); color:var(--cf-neg-text);}
+  /* three-tier, not two: flat/zero growth gets its own amber tier (reuses the grand-total's
+     amber token — same "hold steady" language already used elsewhere on this page) rather
+     than silently falling back to no color at all */
+  td.cf-neutral{background:var(--amber-bg); color:var(--amber);}
   /* conditional formatting must still show on campus/program/grand totals — these rows
      otherwise set their own flat background, which would silently hide the tint */
   tbody tr.is-total td.cf-pos{background:var(--cf-pos-bg); color:var(--cf-pos-text);}
   tbody tr.is-total td.cf-neg{background:var(--cf-neg-bg); color:var(--cf-neg-text);}
+  tbody tr.is-total td.cf-neutral{background:var(--amber-bg); color:var(--amber);}
   /* Total Sunstone (grand row) deliberately excluded — its existing amber styling (higher
      specificity than the base td.cf-pos/neg rules) wins back automatically */
   td.editing{padding:3px 6px;}
@@ -1150,6 +1155,7 @@ const RAW_DATA = {"columns": [{"idx": 6, "group": "2025", "sub": "2025", "metric
           const n = parseNum(cell.val);
           if(n > 0) td.classList.add("cf-pos");
           else if(n < 0) td.classList.add("cf-neg");
+          else td.classList.add("cf-neutral");
         }
         tr.appendChild(td);
       });
