@@ -372,6 +372,7 @@
   </div>
 
   <div class="sync-banner" id="syncBanner" hidden></div>
+  <div class="sync-banner" id="sheetSyncBanner" hidden></div>
 
   <div class="legend">
     <div class="item"><span class="swatch" style="background:var(--surface-2)"></span>Total / rollup row — live sum of what's below it</div>
@@ -1295,6 +1296,85 @@ const RAW_DATA = {"columns": [{"idx": 6, "group": "2025", "sub": "2025", "metric
   });
 
   render();
+
+  // ---------- live sync: 2025 / 2026 pulled straight from the sheet ----------
+  // 2027 stays manual (that's the whole point of this tool); 2025/2026 are source-of-truth
+  // history, so instead of re-pasting a frozen snapshot every time the sheet changes, we
+  // pull it live from Google's public CSV export of "Final Tab" on every page load.
+  const LIVE_CSV_URL = "https://docs.google.com/spreadsheets/d/1nHv_mTlpWW_EOt1mY5dt1auSabBRiC-B-z4NdlIAp8E/export?format=csv&gid=117030878";
+  const LIVE_GROUPS = new Set(["2025", "2026 Current", "2026 Projected", "Overall CAC 2026", "Sales Satff CAC 2026", "Sales Marketing CAC", "CAC 2026"]);
+  // column idx -> CSV array position: idx 6..42 line up 1:1 with the sheet's own columns;
+  // idx 43 onward is off by one because the sheet has a blank spacer column at CSV position 43
+  // that our idx numbering skipped when this tool was first built (verified against every
+  // column's own group/metric name, not just spot-checked).
+  function csvPos(idx){ return idx <= 42 ? idx : idx + 1; }
+
+  function parseCSV(text){
+    const rows = [];
+    let row = [], field = "", inQuotes = false;
+    for(let i = 0; i < text.length; i++){
+      const c = text[i];
+      if(inQuotes){
+        if(c === '"'){
+          if(text[i+1] === '"'){ field += '"'; i++; }
+          else inQuotes = false;
+        } else field += c;
+      } else {
+        if(c === '"') inQuotes = true;
+        else if(c === ','){ row.push(field); field = ""; }
+        else if(c === '\r'){ /* skip */ }
+        else if(c === '\n'){ row.push(field); field = ""; rows.push(row); row = []; }
+        else field += c;
+      }
+    }
+    if(field !== "" || row.length) { row.push(field); rows.push(row); }
+    return rows;
+  }
+
+  async function syncLiveSheet(){
+    const banner = document.getElementById("sheetSyncBanner");
+    try{
+      const resp = await fetch(LIVE_CSV_URL, {cache: "no-store"});
+      if(!resp.ok) throw new Error("HTTP " + resp.status);
+      const text = await resp.text();
+      const csvRows = parseCSV(text);
+
+      const liveByKey = new Map();
+      for(let i = 3; i < csvRows.length; i++){
+        const r = csvRows[i];
+        const tag = (r[3] || "").trim();
+        const campus = (r[4] || "").trim();
+        const program = (r[5] || "").trim();
+        if(!campus) continue;
+        liveByKey.set(campus + "␟" + program, {tag, cells: r});
+      }
+
+      const liveCols = COLUMNS.filter(c => LIVE_GROUPS.has(c.group));
+      let matchedRows = 0;
+      ROWS.forEach(r=>{
+        const live = liveByKey.get(rowKey(r));
+        if(!live) return;
+        matchedRows++;
+        if(live.tag) r.tag = live.tag;
+        liveCols.forEach(c=>{
+          const cell = live.cells[csvPos(c.idx)];
+          r.v[String(c.idx)] = cell !== undefined ? cell.trim() : "";
+        });
+      });
+
+      render();
+      banner.hidden = false;
+      banner.className = "sync-banner live";
+      const stamp = new Date().toLocaleTimeString([], {hour:"2-digit", minute:"2-digit"});
+      banner.innerHTML = `<span class="dot"></span> 2025/2026 live from the sheet as of ${stamp} (${matchedRows} rows matched) — 2027 stays yours, edited here.`;
+    }catch(e){
+      console.error("live sheet sync failed", e);
+      banner.hidden = false;
+      banner.className = "sync-banner local";
+      banner.innerHTML = `<span class="dot"></span> Couldn't reach the live sheet — showing the last saved 2025/2026 snapshot. 2027 stays yours, edited here.`;
+    }
+  }
+  syncLiveSheet();
 })();
 </script>
 
