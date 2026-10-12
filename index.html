@@ -538,8 +538,13 @@ const RAW_DATA = {"columns": [{"idx": 6, "group": "2025", "sub": "2025", "metric
     return {tag:"Tag", campus:label, program:"", isTotal:true, isGrand:true, baseRow: GRAND_ROW, _leaves: leaves};
   }
   function programTotalRow(program){
-    const leaves = LEAF_ROWS.filter(r => r.program === program);
-    return {tag:"", campus:"All campuses", program, isTotal:true, isGrand:false, synthetic:true, _leaves: leaves};
+    // a program spans campuses with different tags (unlike a campus, which is uniformly
+    // one tag) — so this total has to follow the AL/CCM filter the same way the grand
+    // total does, or it silently includes campuses the filter is supposed to be hiding
+    const all = LEAF_ROWS.filter(r => r.program === program);
+    const leaves = currentTagFilter === "all" ? all : all.filter(r => r.tag === currentTagFilter);
+    const label = currentTagFilter === "all" ? "All campuses" : `All ${currentTagFilter} campuses`;
+    return {tag:"", campus:label, program, isTotal:true, isGrand:false, synthetic:true, _leaves: leaves};
   }
   // ratio columns verified against the sheet's own numbers (ratio-of-sums — the
   // mathematically correct rollup for a %/per-unit figure, not an average-of-ratios):
@@ -988,7 +993,7 @@ const RAW_DATA = {"columns": [{"idx": 6, "group": "2025", "sub": "2025", "metric
   }
   function secondaryLabel(entry){
     if(entry.kind === "grand") return "";
-    if(entry.kind === "total") return currentView === "campus" ? "All programs" : "All campuses";
+    if(entry.kind === "total") return currentView === "campus" ? "All programs" : entry.row.campus;
     return currentView === "campus" ? entry.row.program : entry.row.campus;
   }
 
