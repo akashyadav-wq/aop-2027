@@ -614,12 +614,12 @@ const RAW_DATA = {"columns": [{"idx": 6, "group": "2025", "sub": "2025", "metric
     9:  {num:8,  den:6},            // 2025 % Gross to RTC
     11: {num:10, den:8},            // 2025 % RTC to Inclass
     12: {num:10, den:6},            // 2025 % Inclass from gross
-    16: {num:13, den:8,  value:true},                 // 2025 ARPU = RTC Revenue / RTC
+    16: {num:15, den:10, value:true},                 // 2025 ARPU = Net Inclass Revenue / In-Class admissions
     21: {num:19, den:17},           // 2026 Current % RTC
-    24: {num:23, den:19, value:true, scale:1e7},       // 2026 Current ARPU (revenue in Cr)
+    24: {num:23, den:20, value:true, scale:1e7},       // 2026 Current ARPU = RTC+NonRefunded Revenue (Cr) / In-Class admissions — this section has no dedicated in-class-revenue column, so revenue is the only one there is, denominator corrected to In-Class (was RTC)
     28: {num:27, den:25},           // 2026 Projected RTC %
     29: {num:30, den:27},           // 2026 Projected % RTC to Inclass
-    35: {num:31, den:27, value:true},                 // 2026 Projected ARPU
+    35: {num:33, den:30, value:true},                 // 2026 Projected ARPU = Projected In-Class Revenue / Projected In-class Admissions
 
     // CAC 2026 section — verified against the full dataset (ratio-of-sums), denominator
     // is the 2026 Projected RTC count (col27), the same "qualified admission" base the
