@@ -186,8 +186,10 @@
   td.cf-neg{background:var(--cf-neg-bg); color:var(--cf-neg-text);}
   /* conditional formatting must still show on campus/program/grand totals — these rows
      otherwise set their own flat background, which would silently hide the tint */
-  tbody tr.is-total td.cf-pos, tbody tr.is-grand td.cf-pos{background:var(--cf-pos-bg); color:var(--cf-pos-text);}
-  tbody tr.is-total td.cf-neg, tbody tr.is-grand td.cf-neg{background:var(--cf-neg-bg); color:var(--cf-neg-text);}
+  tbody tr.is-total td.cf-pos{background:var(--cf-pos-bg); color:var(--cf-pos-text);}
+  tbody tr.is-total td.cf-neg{background:var(--cf-neg-bg); color:var(--cf-neg-text);}
+  /* Total Sunstone (grand row) deliberately excluded — its existing amber styling (higher
+     specificity than the base td.cf-pos/neg rules) wins back automatically */
   td.editing{padding:3px 6px;}
   td.editing input{
     width:100%; text-align:right; font-family:"IBM Plex Mono",monospace; font-size:12.5px;
