@@ -488,8 +488,12 @@ const RAW_DATA = {"columns": [{"idx": 6, "group": "2025", "sub": "2025", "metric
   // 2027's cost section has no Sales-Staff-expense/Incentive breakout like 2026's (73/74),
   // so only its Sales & Marketing total (82) and Overall total (76) can be derived from
   // their own channel costs — Sales Staff CAC(79) has nothing to decompose from, stays editable
-  const FORCE_DERIVED = new Set([44, 47, 50, 76, 82]);
-  const SUMMABLE = new Map(COLUMNS.map(c => [colKey(c), isSummable(c.label) && !FORCE_DERIVED.has(c.idx)]));
+  const FORCE_DERIVED = new Set([40, 44, 47, 50, 76, 82]);
+  // 2027 ARPU(42) is now a typed planning assumption (Revenue = Admissions × ARPU), not a
+  // ratio derived from Revenue — but its label matches "ARPU" so isSummable() would
+  // otherwise exclude it from being editable. Force it editable despite that.
+  const FORCE_EDITABLE = new Set([42]);
+  const SUMMABLE = new Map(COLUMNS.map(c => [colKey(c), (isSummable(c.label) || FORCE_EDITABLE.has(c.idx)) && !FORCE_DERIVED.has(c.idx)]));
 
   function parseNum(v){
     if(v === undefined || v === null || v === "") return null;
@@ -546,7 +550,6 @@ const RAW_DATA = {"columns": [{"idx": 6, "group": "2025", "sub": "2025", "metric
     28: {num:27, den:25},           // 2026 Projected RTC %
     29: {num:30, den:27},           // 2026 Projected % RTC to Inclass
     35: {num:31, den:27, value:true},                 // 2026 Projected ARPU
-    42: {num:40, den:38, value:true},                 // 2027 ARPU
 
     // CAC 2026 section — verified against the full dataset (ratio-of-sums), denominator
     // is the 2026 Projected RTC count (col27), the same "qualified admission" base the
@@ -608,6 +611,12 @@ const RAW_DATA = {"columns": [{"idx": 6, "group": "2025", "sub": "2025", "metric
     82: [88, 93, 98, 103],   // 2027 Sales & Marketing CAC = sum of the 4 channel costs
     76: [79, 88, 93, 98, 103], // 2027 Overall Cost = Sales Staff CAC(79, stays editable) + Sales & Marketing CAC, flattened
   };
+  // product of two editable columns — Revenue is no longer hand-typed: you type Admissions
+  // and an ARPU assumption, Revenue follows. (Reverse of a ratio formula: those divide two
+  // inputs to get a rate; this multiplies a count by a rate to get an amount.)
+  const PRODUCT_FORMULAS = {
+    40: {a:38, b:42},  // 2027 Planned In-Class Revenue = Planned In-Class Admissions × ARPU
+  };
 
   // resolves one column to a plain number via `rawGetNum` (which reads storage directly —
   // summed across leaves for a total row, or read off one row's own cells for a leaf),
@@ -624,6 +633,12 @@ const RAW_DATA = {"columns": [{"idx": 6, "group": "2025", "sub": "2025", "metric
       });
       return any ? total : null;
     }
+    if(PRODUCT_FORMULAS[i]){
+      const f = PRODUCT_FORMULAS[i];
+      const a = resolveCol(rawGetNum, f.a);
+      const b = resolveCol(rawGetNum, f.b);
+      return (a === null || b === null) ? null : a * b;
+    }
     return rawGetNum(i);
   }
 
@@ -635,6 +650,10 @@ const RAW_DATA = {"columns": [{"idx": 6, "group": "2025", "sub": "2025", "metric
     const i = Number(idx);
     const getNum = c => resolveCol(rawGetNum, c);
     if(SUM_FORMULAS[i]){
+      const v = getNum(i);
+      return v !== null ? formatNum(v) : null;
+    }
+    if(PRODUCT_FORMULAS[i]){
       const v = getNum(i);
       return v !== null ? formatNum(v) : null;
     }
@@ -662,6 +681,19 @@ const RAW_DATA = {"columns": [{"idx": 6, "group": "2025", "sub": "2025", "metric
 
   function totalCellVal(totalRow, idx){
     const leaves = totalRow._leaves;
+    const i = Number(idx);
+    if(PRODUCT_FORMULAS[i]){
+      // a product column's total is the sum of each leaf's own product (Σ admissions×ARPU),
+      // not (Σ admissions)×(Σ ARPU) — summing the rates first would be meaningless
+      const f = PRODUCT_FORMULAS[i];
+      let total = 0, any = false;
+      leaves.forEach(r=>{
+        const a = resolveCol(c => parseNum(effVal(r, c)), f.a);
+        const b = resolveCol(c => parseNum(effVal(r, c)), f.b);
+        if(a !== null && b !== null){ total += a * b; any = true; }
+      });
+      return any ? formatNum(total) : null;
+    }
     const derived = computeDerived(i => sumFor(leaves, i), idx);
     if(derived !== undefined) return derived;
     if(SUMMABLE.get(String(idx))){
