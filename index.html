@@ -204,7 +204,7 @@
     background:var(--navy-ink); padding-top:4px; padding-bottom:4px;
     text-align:center;
   }
-  thead tr.metric-row th{top:23px;}
+  thead tr.metric-row th{top:23px; white-space:normal; max-width:104px; line-height:1.25; vertical-align:bottom;}
   thead th.pin{text-align:left; background:var(--navy); z-index:4;}
   thead tr.grp-row th.pin{background:var(--navy-ink); text-align:left;}
 
@@ -554,7 +554,7 @@ const RAW_DATA = {"columns": [{"idx": 6, "group": "2025", "sub": "2025", "metric
     // CAC 2026 section — verified against the full dataset (ratio-of-sums), denominator
     // is the 2026 Projected RTC count (col27), the same "qualified admission" base the
     // sheet uses throughout this block; revenue-based %s use 2026 Current RTC Revenue
-    // (col23, stored in Cr, hence ×1e7). Per-channel CAC % (cols 55/60/65) didn't resolve
+    // (col23, stored in Cr, hence ×1e7). Per-channel CAC % (cols 55/60/65/70) didn't resolve
     // against any combination of visible columns — left uncomputed rather than guessed.
     43: {num:44, den:27, value:true},                 // Overall CAC Per Admission
     45: {num:44, den:23, denScale:1e7},                 // Overall % CAC (revenue side is Cr, so the ₹ conversion goes on the denominator)
@@ -566,7 +566,9 @@ const RAW_DATA = {"columns": [{"idx": 6, "group": "2025", "sub": "2025", "metric
     59: {num:61, den:57, value:true},                  // Influencer Paid per admission
     64: {num:66, den:62, value:true},                  // Marketing Paid per admission
     69: {num:71, den:67, value:true},                  // Organic Paid per admission
-    70: {num:71, den:23, denScale:1e7},                 // Organic CAC %
+    // 70 (Organic CAC %) initially carried the same shape as 45/48/51 (den:23, denScale:1e7)
+    // but a full leaf-row audit against the sheet showed it wrong on 14/14 rows (median
+    // ~70% off, not rounding noise) — removed rather than ship a formula that doesn't hold.
     53: {num:52, denSum:[52,57,62,67]},                // Consultant % Contr. (share of all 4 channels' admissions)
     58: {num:57, denSum:[52,57,62,67]},                // Influencer % Contr.
     63: {num:62, denSum:[52,57,62,67]},                // Marketing % Contr.
@@ -623,18 +625,31 @@ const RAW_DATA = {"columns": [{"idx": 6, "group": "2025", "sub": "2025", "metric
   // except a SUM_FORMULAS column, which is resolved recursively through its own inputs —
   // so a formula that takes col44/47/50 as an input always sees the live composite, never
   // the stale value sitting in storage under that column.
-  function resolveCol(rawGetNum, idx){
+  // `leaves`, when passed, means we're resolving for a total row — a PRODUCT_FORMULAS column
+  // can't just multiply the two inputs' sums (Σa × Σb ≠ Σ(a×b) when a/b are per-row rates),
+  // so with `leaves` present it sums each leaf's own product instead.
+  function resolveCol(rawGetNum, idx, leaves){
     const i = Number(idx);
     if(SUM_FORMULAS[i]){
       let total = 0, any = false;
       SUM_FORMULAS[i].forEach(c=>{
-        const v = resolveCol(rawGetNum, c);
+        const v = resolveCol(rawGetNum, c, leaves);
         if(v !== null){ total += v; any = true; }
       });
       return any ? total : null;
     }
     if(PRODUCT_FORMULAS[i]){
       const f = PRODUCT_FORMULAS[i];
+      if(leaves){
+        let total = 0, any = false;
+        leaves.forEach(r=>{
+          const leafGet = c => parseNum(effVal(r, c));
+          const a = resolveCol(leafGet, f.a);
+          const b = resolveCol(leafGet, f.b);
+          if(a !== null && b !== null){ total += a * b; any = true; }
+        });
+        return any ? total : null;
+      }
       const a = resolveCol(rawGetNum, f.a);
       const b = resolveCol(rawGetNum, f.b);
       return (a === null || b === null) ? null : a * b;
@@ -646,9 +661,9 @@ const RAW_DATA = {"columns": [{"idx": 6, "group": "2025", "sub": "2025", "metric
   // whichever way the caller sources it (summed across leaves for a total row, or read
   // straight off one row's own cells for a leaf row). Returns undefined when no formula
   // is defined for this column at all (caller then falls back to its own default).
-  function computeDerived(rawGetNum, idx){
+  function computeDerived(rawGetNum, idx, leaves){
     const i = Number(idx);
-    const getNum = c => resolveCol(rawGetNum, c);
+    const getNum = c => resolveCol(rawGetNum, c, leaves);
     if(SUM_FORMULAS[i]){
       const v = getNum(i);
       return v !== null ? formatNum(v) : null;
@@ -679,22 +694,26 @@ const RAW_DATA = {"columns": [{"idx": 6, "group": "2025", "sub": "2025", "metric
     return undefined;
   }
 
+  // columns that are a typed rate at leaf level (so SUMMABLE sees them as plain editable
+  // inputs) but whose TOTAL has to be a weighted average, not a sum of rates — summing
+  // ARPU across programs is meaningless; the rolled-up ARPU is total revenue / total
+  // admissions, same shape as the ratio formula ARPU used to be before it became editable
+  const TOTAL_WEIGHTED_AVG = {
+    42: {num:40, den:38},  // 2027 ARPU total = Σ Planned In-Class Revenue / Σ Planned In-Class Admissions
+  };
+
   function totalCellVal(totalRow, idx){
     const leaves = totalRow._leaves;
     const i = Number(idx);
-    if(PRODUCT_FORMULAS[i]){
-      // a product column's total is the sum of each leaf's own product (Σ admissions×ARPU),
-      // not (Σ admissions)×(Σ ARPU) — summing the rates first would be meaningless
-      const f = PRODUCT_FORMULAS[i];
-      let total = 0, any = false;
-      leaves.forEach(r=>{
-        const a = resolveCol(c => parseNum(effVal(r, c)), f.a);
-        const b = resolveCol(c => parseNum(effVal(r, c)), f.b);
-        if(a !== null && b !== null){ total += a * b; any = true; }
-      });
-      return any ? formatNum(total) : null;
+    if(TOTAL_WEIGHTED_AVG[i]){
+      const f = TOTAL_WEIGHTED_AVG[i];
+      const rawGetNum = c => sumFor(leaves, c);
+      const num = resolveCol(rawGetNum, f.num, leaves);
+      const den = resolveCol(rawGetNum, f.den, leaves);
+      if(num === null || den === null || den === 0) return null;
+      return formatNum(num / den);
     }
-    const derived = computeDerived(i => sumFor(leaves, i), idx);
+    const derived = computeDerived(i => sumFor(leaves, i), idx, leaves);
     if(derived !== undefined) return derived;
     if(SUMMABLE.get(String(idx))){
       const s = sumFor(leaves, idx);
