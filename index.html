@@ -763,18 +763,39 @@ const RAW_DATA = {"columns": [{"idx": 6, "group": "2025", "sub": "2025", "metric
   function totalCellVal(totalRow, idx){
     const leaves = totalRow._leaves;
     const i = Number(idx);
+    // for a column pulled live from the sheet, the row's OWN total-row cell (already
+    // synced by syncLiveSheet, since it iterates every row, not just leaves) is the
+    // sheet's own authoritative stated total — use it directly instead of summing the
+    // per-program breakdown underneath it. Verified this matters: some 2026 Current
+    // revenue/cost columns don't reconcile between the sheet's own total and the sum of
+    // its own program rows, even when every program row looks filled in — the sheet's
+    // total is the one actually meant to be trusted. Only applies when this total
+    // corresponds to one real sheet row (baseRow); a program-level total spanning many
+    // campuses (programTotalRow, synthetic) has no single sheet row to defer to, so it
+    // always falls through to summing — exactly like before.
+    // the grand total's own baseRow (GRAND_ROW) is the sheet's unfiltered, all-campuses
+    // total — only safe to defer to it when the AL/CCM quick filter is "all"; filtered,
+    // there's no "sheet's own AL-only total" to read, so it must fall back to summing
+    const baseRowIsTrustworthy = totalRow.baseRow && (!totalRow.isGrand || currentTagFilter === "all");
+    const rawGetNum = c => {
+      const ci = Number(c);
+      if(FORCE_FROZEN.has(ci) && baseRowIsTrustworthy){
+        const v = parseNum(totalRow.baseRow.v[String(ci)]);
+        if(v !== null) return v;
+      }
+      return sumFor(leaves, ci);
+    };
     if(TOTAL_WEIGHTED_AVG[i]){
       const f = TOTAL_WEIGHTED_AVG[i];
-      const rawGetNum = c => sumFor(leaves, c);
       const num = resolveCol(rawGetNum, f.num, leaves);
       const den = resolveCol(rawGetNum, f.den, leaves);
       if(num === null || den === null || den === 0) return null;
       return formatNum(num / den);
     }
-    const derived = computeDerived(i => sumFor(leaves, i), idx, leaves);
+    const derived = computeDerived(rawGetNum, idx, leaves);
     if(derived !== undefined) return derived;
     if(SUMMABLE.get(String(idx))){
-      const s = sumFor(leaves, idx);
+      const s = rawGetNum(idx);
       return s === null ? null : formatNum(s);
     }
     // CAC-section ratios couldn't be reverse-engineered from the exported columns
