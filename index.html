@@ -511,6 +511,19 @@ const RAW_DATA = {"columns": [{"idx": 6, "group": "2025", "sub": "2025", "metric
   // otherwise exclude it from being editable. Force it editable despite that.
   const FORCE_EDITABLE = new Set([42]);
   const SUMMABLE = new Map(COLUMNS.map(c => [colKey(c), (isSummable(c.label) || FORCE_EDITABLE.has(c.idx)) && !FORCE_DERIVED.has(c.idx)]));
+  // columns whose GROUP is pulled live from the sheet (see syncLiveSheet below) — these must
+  // never be hand-editable: a local edit would just get silently overwritten by the next
+  // live refresh anyway, and worse, since overrides are checked before the synced value, a
+  // single accidental click-to-edit on one of these cells would permanently shadow every
+  // future live update for that cell in this browser. Declared here (not just down by
+  // syncLiveSheet) because EDITABLE below needs it at startup, before any fetch happens.
+  const LIVE_GROUPS = new Set(["2025", "2026 Current", "2026 Projected", "Overall CAC 2026", "Sales Satff CAC 2026", "Sales Marketing CAC", "CAC 2026"]);
+  const FORCE_FROZEN = new Set(COLUMNS.filter(c => LIVE_GROUPS.has(c.group)).map(c => c.idx));
+  // EDITABLE (click-to-edit + override lookup) is SUMMABLE minus the live-synced columns.
+  // SUMMABLE itself stays untouched so campus/grand totals keep summing these columns
+  // normally — only hand-typing into a leaf cell (and remembering an override for it) is
+  // disabled for anything the sheet now supplies.
+  const EDITABLE = new Map(COLUMNS.map(c => [colKey(c), SUMMABLE.get(colKey(c)) && !FORCE_FROZEN.has(c.idx)]));
 
   function parseNum(v){
     if(v === undefined || v === null || v === "") return null;
@@ -524,8 +537,12 @@ const RAW_DATA = {"columns": [{"idx": 6, "group": "2025", "sub": "2025", "metric
   }
 
   function effVal(r, idx){
-    const ov = overrides[rowKey(r)];
     const k = String(idx);
+    // a live-synced column ignores any override, even a stale one left over from before
+    // it became frozen — otherwise an old local edit would silently shadow the sheet
+    // forever, in totals (via sumFor) as well as the leaf cell itself
+    if(FORCE_FROZEN.has(Number(k))) return r.v[k];
+    const ov = overrides[rowKey(r)];
     if(ov && Object.prototype.hasOwnProperty.call(ov, k)) return ov[k];
     return r.v[k];
   }
@@ -761,13 +778,14 @@ const RAW_DATA = {"columns": [{"idx": 6, "group": "2025", "sub": "2025", "metric
     return computeDerived(i => parseNum(effVal(row, i)), idx);
   }
 
-  // only base/input columns (SUMMABLE) are ever editable — anything that's itself a
-  // ratio or per-unit figure (%, ARPU, CAC%, growth…) is always computed, at every
-  // row, and can never be hand-typed
+  // only base/input columns (EDITABLE) are ever hand-typed — anything that's itself a
+  // ratio or per-unit figure (%, ARPU, CAC%, growth…) is always computed, and anything
+  // pulled live from the sheet (EDITABLE excludes FORCE_FROZEN even though it's still
+  // SUMMABLE) always shows the freshly-synced value, never a stale local override
   function cellValue(entry, idx){
     const idxStr = String(idx);
     if(entry.kind === "leaf"){
-      if(SUMMABLE.get(idxStr)){
+      if(EDITABLE.get(idxStr)){
         const ov = overrides[rowKey(entry.row)];
         const val = (ov && Object.prototype.hasOwnProperty.call(ov, idxStr)) ? ov[idxStr] : entry.row.v[idxStr];
         return { val, editable:true };
@@ -1328,7 +1346,8 @@ const RAW_DATA = {"columns": [{"idx": 6, "group": "2025", "sub": "2025", "metric
   // history, so instead of re-pasting a frozen snapshot every time the sheet changes, we
   // pull it live from Google's public CSV export of "Final Tab" on every page load.
   const LIVE_CSV_URL = "https://docs.google.com/spreadsheets/d/1nHv_mTlpWW_EOt1mY5dt1auSabBRiC-B-z4NdlIAp8E/export?format=csv&gid=117030878";
-  const LIVE_GROUPS = new Set(["2025", "2026 Current", "2026 Projected", "Overall CAC 2026", "Sales Satff CAC 2026", "Sales Marketing CAC", "CAC 2026"]);
+  // LIVE_GROUPS is declared up near SUMMABLE/EDITABLE — reused here so the fetch and the
+  // editability lock can never drift out of sync with each other.
   // column idx -> CSV array position: idx 6..42 line up 1:1 with the sheet's own columns;
   // idx 43 onward is off by one because the sheet has a blank spacer column at CSV position 43
   // that our idx numbering skipped when this tool was first built (verified against every
