@@ -1444,6 +1444,9 @@ const RAW_DATA = {"columns": [{"idx": 6, "group": "2025", "sub": "2025", "metric
       const text = await resp.text();
       const csvRows = parseCSV(text);
 
+      // keyed by tag+campus+program, not just campus+program — the sheet has one exact
+      // collision (two separate "SAGE" / blank-program rows, one tagged AL and one with no
+      // tag at all) that plain campus+program can't tell apart
       const liveByKey = new Map();
       for(let i = 3; i < csvRows.length; i++){
         const r = csvRows[i];
@@ -1451,8 +1454,12 @@ const RAW_DATA = {"columns": [{"idx": 6, "group": "2025", "sub": "2025", "metric
         const campus = (r[4] || "").trim();
         const program = (r[5] || "").trim();
         if(!campus) continue;
-        liveByKey.set(campus + "␟" + program, {tag, cells: r});
+        liveByKey.set(tag + "␟" + campus + "␟" + program, {tag, cells: r});
       }
+      // "SAGE Exclusive" is a display rename of that blank-tag SAGE row (not literally
+      // spelled that way anywhere in the sheet) — map it back to its real sheet identity so
+      // live sync still finds it instead of silently never matching
+      const LIVE_KEY_OVERRIDES = { "SAGE Exclusive␟SAGE Exclusive": "␟SAGE␟" };
 
       // idx 23 (2026 Current | RTC + Non Refunded Revenue) was removed from COLUMNS along
       // with the rest of the "2026 Current" tracker group, but CAC% formulas 45/48/51 still
@@ -1460,7 +1467,8 @@ const RAW_DATA = {"columns": [{"idx": 6, "group": "2025", "sub": "2025", "metric
       const liveCols = COLUMNS.filter(c => LIVE_GROUPS.has(c.group)).concat([{idx:23}]);
       let matchedRows = 0;
       ROWS.forEach(r=>{
-        const live = liveByKey.get(rowKey(r));
+        const key = LIVE_KEY_OVERRIDES[rowKey(r)] || (r.tag + "␟" + rowKey(r));
+        const live = liveByKey.get(key);
         if(!live) return;
         matchedRows++;
         if(live.tag) r.tag = live.tag;
