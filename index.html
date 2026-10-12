@@ -27,6 +27,7 @@
     --tag-al-bg:#e4edf8;
     --tag-ccm:#7a5ea8;
     --tag-ccm-bg:#ede7f6;
+    --formula:#0f8a6b;
     --shadow:0 10px 30px -12px rgba(15,31,54,.18);
     --row-alt:#f7f9fc;
   }
@@ -51,6 +52,7 @@
       --tag-al-bg:#15283f;
       --tag-ccm:#b79ae0;
       --tag-ccm-bg:#241c3a;
+      --formula:#3fcba3;
       --shadow:0 10px 30px -12px rgba(0,0,0,.5);
       --row-alt:#0d1a2c;
     }
@@ -75,6 +77,7 @@
     --tag-al-bg:#15283f;
     --tag-ccm:#b79ae0;
     --tag-ccm-bg:#241c3a;
+    --formula:#3fcba3;
     --shadow:0 10px 30px -12px rgba(0,0,0,.5);
     --row-alt:#0d1a2c;
   }
@@ -162,8 +165,9 @@
   }
 
   /* ---------- editable cells ---------- */
-  td.editable{cursor:text; position:relative;}
+  td.editable{cursor:text; position:relative; color:var(--accent); font-weight:600;}
   td.editable:hover{background:var(--accent-soft); box-shadow:inset 0 0 0 1.5px var(--accent);}
+  td.computed{color:var(--formula);}
   td.editing{padding:3px 6px;}
   td.editing input{
     width:100%; text-align:right; font-family:"IBM Plex Mono",monospace; font-size:12.5px;
@@ -188,7 +192,7 @@
   .table-scroll{overflow:auto; max-height:72vh;}
   table{border-collapse:separate; border-spacing:0; width:max-content; min-width:100%;}
 
-  th,td{padding:7px 11px; white-space:nowrap; border-bottom:1px solid var(--border);}
+  th,td{padding:5px 9px; white-space:nowrap; border-bottom:1px solid var(--border);}
   thead th{
     position:sticky; top:0; z-index:3;
     background:var(--navy); color:#eaf1fb;
@@ -197,11 +201,11 @@
   }
   thead tr.grp-row th{
     top:0; font-size:10px; color:#b9cde8; font-weight:700; letter-spacing:.07em;
-    background:var(--navy-ink); padding-top:6px; padding-bottom:6px;
+    background:var(--navy-ink); padding-top:4px; padding-bottom:4px;
     text-align:center;
   }
-  thead tr.metric-row th{top:27px;}
-  thead th.pin{text-align:left; background:var(--navy);}
+  thead tr.metric-row th{top:23px;}
+  thead th.pin{text-align:left; background:var(--navy); z-index:4;}
   thead tr.grp-row th.pin{background:var(--navy-ink); text-align:left;}
 
   td.pin, th.pin{
@@ -1025,6 +1029,8 @@ const RAW_DATA = {"columns": [{"idx": 6, "group": "2025", "sub": "2025", "metric
           td.dataset.col = idxStr;
         } else if(cell.val === null){
           td.classList.add("rollup-cell");
+        } else {
+          td.classList.add("computed");
         }
         tr.appendChild(td);
       });
