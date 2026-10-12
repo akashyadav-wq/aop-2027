@@ -446,6 +446,7 @@ const RAW_DATA = {"columns": [{"idx": 6, "group": "2025", "sub": "2025", "metric
   const PROGRAM_NAMES = Array.from(new Set(LEAF_ROWS.map(r => r.program))).sort();
 
   let currentView = "campus"; // "campus" | "program"
+  let currentTagFilter = "all"; // "all" | "AL" | "CCM" — which the grand total rolls up over
   let collapsedGroups = new Set(); // campus names (campus view) or program names (program view) currently collapsed
 
   // every row selected by default — Customize narrows the view, it never hides data from the totals
@@ -529,7 +530,12 @@ const RAW_DATA = {"columns": [{"idx": 6, "group": "2025", "sub": "2025", "metric
     return {tag: base ? base.tag : "", campus, program: "", isTotal:true, isGrand:false, baseRow: base, _leaves: leaves};
   }
   function grandTotalRow(){
-    return {tag:"Tag", campus:"Total Sunstone", program:"", isTotal:true, isGrand:true, baseRow: GRAND_ROW, _leaves: LEAF_ROWS};
+    // unlike campus/program totals (always "everything"), the grand total follows the AL/CCM
+    // quick filter — that filter is a scope switch (show me only AL, only CCM), not a generic
+    // row pick-list, so "Total Sunstone" should mean "total of what's on screen" here
+    const leaves = currentTagFilter === "all" ? LEAF_ROWS : LEAF_ROWS.filter(r => r.tag === currentTagFilter);
+    const label = currentTagFilter === "all" ? "Total Sunstone" : `Total Sunstone (${currentTagFilter})`;
+    return {tag:"Tag", campus:label, program:"", isTotal:true, isGrand:true, baseRow: GRAND_ROW, _leaves: leaves};
   }
   function programTotalRow(program){
     const leaves = LEAF_ROWS.filter(r => r.program === program);
@@ -976,7 +982,7 @@ const RAW_DATA = {"columns": [{"idx": 6, "group": "2025", "sub": "2025", "metric
   }
 
   function primaryLabel(entry){
-    if(entry.kind === "grand") return "Total Sunstone";
+    if(entry.kind === "grand") return entry.row.campus;
     // the column that matches the active view's grouping (Campus in campus-view, Program in program-view)
     return currentView === "campus" ? entry.row.campus : entry.row.program;
   }
@@ -1219,6 +1225,7 @@ const RAW_DATA = {"columns": [{"idx": 6, "group": "2025", "sub": "2025", "metric
       document.querySelectorAll("#tagSwitch .view-btn").forEach(b=>{ b.classList.remove("active"); b.setAttribute("aria-selected","false"); });
       btn.classList.add("active"); btn.setAttribute("aria-selected","true");
       const tag = btn.dataset.tag;
+      currentTagFilter = tag;
       if(tag === "all"){
         selectedRows = new Set(ROWS.map(rowKey));
       } else {
