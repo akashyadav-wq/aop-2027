@@ -254,7 +254,16 @@
     background:var(--navy-ink); padding-top:4px; padding-bottom:4px;
     text-align:center;
   }
-  thead tr.metric-row th{top:23px; white-space:normal; max-width:90px; line-height:1.25; vertical-align:middle; text-align:center;}
+  thead tr.metric-row th{top:23px; white-space:normal; max-width:90px; line-height:1.25; vertical-align:middle; text-align:center; padding:4px 3px;}
+  .th-inner{display:flex; align-items:center; justify-content:center; gap:3px;}
+  .th-label{flex:1; min-width:0;}
+  .col-move{
+    flex:none; border:none; background:none; color:#7f93b0; padding:1px 2px; font-size:8px;
+    line-height:1; border-radius:3px; opacity:0; transition:opacity .12s, color .12s, background .12s;
+  }
+  thead tr.metric-row th:hover .col-move{opacity:1;}
+  .col-move:hover{color:#eaf1fb; background:rgba(255,255,255,.12);}
+  .col-move:disabled{visibility:hidden;}
   thead th.pin{text-align:center; background:var(--navy); z-index:4;}
   thead tr.grp-row th.pin{background:var(--navy-ink); text-align:center;}
 
@@ -492,6 +501,20 @@ const RAW_DATA = {"columns": [{"idx": 6, "group": "2025", "sub": "2025", "metric
 
   const rowKey = r => r.campus + "␟" + r.program;
   const colKey = c => String(c.idx);
+  const colByKey = new Map(COLUMNS.map(c => [colKey(c), c]));
+  // display order, independent of COLUMNS' own array order — the ◀▶ buttons on each header
+  // swap a column with its nearest VISIBLE neighbor in this list; session-only, same as
+  // selectedCols/selectedRows (resets to the natural order on reload)
+  let colOrder = COLUMNS.map(colKey);
+  function moveColumn(key, dir){
+    const i = colOrder.indexOf(key);
+    if(i < 0) return;
+    let j = i + dir;
+    while(j >= 0 && j < colOrder.length && !selectedCols.has(colOrder[j])) j += dir;
+    if(j < 0 || j >= colOrder.length) return;
+    [colOrder[i], colOrder[j]] = [colOrder[j], colOrder[i]];
+    render();
+  }
 
   const LEAF_ROWS = ROWS.filter(r => r.program);               // true per-program rows
   const GRAND_ROW = ROWS.find(r => !r.program && r.campus === "Total Sunstone");
@@ -1083,7 +1106,7 @@ const RAW_DATA = {"columns": [{"idx": 6, "group": "2025", "sub": "2025", "metric
   }
 
   function render(){
-    const cols = COLUMNS.filter(c => selectedCols.has(colKey(c)));
+    const cols = colOrder.filter(k => selectedCols.has(k)).map(k => colByKey.get(k));
     const entries = buildBodyEntries();
 
     const table = document.getElementById("dataTable");
@@ -1121,13 +1144,20 @@ const RAW_DATA = {"columns": [{"idx": 6, "group": "2025", "sub": "2025", "metric
       i += span;
     }
 
-    cols.forEach(c=>{
+    cols.forEach((c,pos)=>{
       const th = document.createElement("th");
       const shortLabel = c.label.split(" | ").slice(1).join(" — ") || c.label;
-      th.textContent = shortLabel;
       th.title = c.label;
       if(groupStarts.has(c.idx)) th.classList.add("grp-div");
       if(BOLD_COLS.has(c.idx)) th.classList.add("col-bold");
+      const k = colKey(c);
+      const leftDisabled = pos === 0 ? " disabled" : "";
+      const rightDisabled = pos === cols.length - 1 ? " disabled" : "";
+      th.innerHTML = `<div class="th-inner">
+        <button class="col-move" data-move="${k}" data-dir="-1" title="Move column left"${leftDisabled}>&#9664;</button>
+        <span class="th-label">${shortLabel}</span>
+        <button class="col-move" data-move="${k}" data-dir="1" title="Move column right"${rightDisabled}>&#9654;</button>
+      </div>`;
       metricRow.appendChild(th);
     });
 
@@ -1232,6 +1262,11 @@ const RAW_DATA = {"columns": [{"idx": 6, "group": "2025", "sub": "2025", "metric
   // ---------- inline cell editing ----------
   let editCommitted = false;
   document.getElementById("dataTable").addEventListener("click", e=>{
+    const moveBtn = e.target.closest(".col-move");
+    if(moveBtn){
+      moveColumn(moveBtn.dataset.move, Number(moveBtn.dataset.dir));
+      return;
+    }
     const toggle = e.target.closest(".group-toggle");
     if(toggle){
       const key = toggle.dataset.group;
