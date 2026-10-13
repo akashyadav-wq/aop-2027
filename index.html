@@ -1461,6 +1461,72 @@ const RAW_DATA = {"columns": [{"idx": 6, "group": "2025", "sub": "2025", "metric
     }
   }
 
+  // view/tag filter + the Customize row/column picks — same "shared, sticks after refresh"
+  // treatment as colOrder, debounced the same way for the same reason (so refreshing right
+  // after filtering doesn't outrun the save).
+  let filterSaveTimer = null;
+  function persistFiltersRemote(){
+    if(!sb) return;
+    clearTimeout(filterSaveTimer);
+    const banner = document.getElementById("syncBanner");
+    const restoreHTML = banner.innerHTML, restoreClass = banner.className;
+    banner.hidden = false;
+    banner.className = "sync-banner local";
+    banner.innerHTML = `<span class="dot"></span> Saving filters…`;
+    filterSaveTimer = setTimeout(async ()=>{
+      const value = {
+        currentView, currentTagFilter,
+        selectedRows: [...selectedRows],
+        selectedCols: [...selectedCols],
+      };
+      const { error } = await sb.from("settings").upsert({ key: "filters", value });
+      if(error){
+        console.error("could not save filters to shared database", error);
+        banner.className = "sync-banner local";
+        banner.innerHTML = `<span class="dot"></span> Couldn't save filters — try again.`;
+        return;
+      }
+      banner.className = "sync-banner live";
+      banner.innerHTML = `<span class="dot"></span> Filters saved — safe to refresh.`;
+      setTimeout(()=>{ banner.innerHTML = restoreHTML; banner.className = restoreClass; }, 2000);
+    }, 400);
+  }
+
+  function setActiveButton(container, matchFn){
+    container.querySelectorAll(".view-btn").forEach(b=>{
+      const active = matchFn(b);
+      b.classList.toggle("active", active);
+      b.setAttribute("aria-selected", active ? "true" : "false");
+    });
+  }
+
+  async function syncFiltersFromRemote(){
+    if(!sb) return;
+    const { data, error } = await sb.from("settings").select("value").eq("key", "filters").maybeSingle();
+    if(error){ console.error("could not load shared filters", error); return; }
+    if(!data || !data.value) return;
+    const f = data.value;
+    if(f.currentView === "campus" || f.currentView === "program"){
+      currentView = f.currentView;
+      setActiveButton(document.getElementById("viewSwitch"), b => b.dataset.view === currentView);
+    }
+    if(typeof f.currentTagFilter === "string"){
+      currentTagFilter = f.currentTagFilter;
+      setActiveButton(document.getElementById("tagSwitch"), b => b.dataset.tag === currentTagFilter);
+    }
+    const allRowKeys = new Set(ROWS.map(rowKey));
+    const allColKeys = new Set(COLUMNS.map(colKey));
+    if(Array.isArray(f.selectedRows)){
+      selectedRows = new Set(f.selectedRows.filter(k => allRowKeys.has(k)));
+    }
+    if(Array.isArray(f.selectedCols)){
+      selectedCols = new Set(f.selectedCols.filter(k => allColKeys.has(k)));
+    }
+    draftRows = new Set(selectedRows);
+    draftCols = new Set(selectedCols);
+    render();
+  }
+
   (function initStorage(){
     overrides = loadOverrides();
     const banner = document.getElementById("syncBanner");
@@ -1476,6 +1542,7 @@ const RAW_DATA = {"columns": [{"idx": 6, "group": "2025", "sub": "2025", "metric
       btn.classList.add("active"); btn.setAttribute("aria-selected","true");
       currentView = btn.dataset.view;
       render();
+      persistFiltersRemote();
     });
   });
 
@@ -1492,6 +1559,7 @@ const RAW_DATA = {"columns": [{"idx": 6, "group": "2025", "sub": "2025", "metric
         selectedRows = new Set([rowKey(GRAND_ROW), ...ROWS.filter(r => r.tag === tag).map(rowKey)]);
       }
       render();
+      persistFiltersRemote();
     });
   });
 
@@ -1547,6 +1615,7 @@ const RAW_DATA = {"columns": [{"idx": 6, "group": "2025", "sub": "2025", "metric
     selectedCols = new Set(draftCols);
     render();
     closeDrawer();
+    persistFiltersRemote();
   });
 
   render();
@@ -1643,6 +1712,7 @@ const RAW_DATA = {"columns": [{"idx": 6, "group": "2025", "sub": "2025", "metric
   syncLiveSheet();
   syncOverridesFromRemote();
   syncColOrderFromRemote();
+  syncFiltersFromRemote();
 })();
 </script>
 
