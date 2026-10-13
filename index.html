@@ -1407,10 +1407,31 @@ const RAW_DATA = {"columns": [{"idx": 6, "group": "2025", "sub": "2025", "metric
     banner.innerHTML = `<span class="dot"></span> Edits sync across every device — last loaded just now.`;
   }
 
-  async function persistColOrderRemote(){
+  // debounced so rapid clicks (rearranging several columns in a row) send one write with the
+  // final order instead of racing several overlapping requests — and the banner actually
+  // tells you when it's landed, since refreshing before the write completes is exactly what
+  // makes a move look like it "didn't stick"
+  let colOrderSaveTimer = null;
+  function persistColOrderRemote(){
     if(!sb) return;
-    const { error } = await sb.from("settings").upsert({ key: "colOrder", value: colOrder });
-    if(error) console.error("could not save column order to shared database", error);
+    clearTimeout(colOrderSaveTimer);
+    const banner = document.getElementById("syncBanner");
+    const restoreHTML = banner.innerHTML, restoreClass = banner.className;
+    banner.hidden = false;
+    banner.className = "sync-banner local";
+    banner.innerHTML = `<span class="dot"></span> Saving column order…`;
+    colOrderSaveTimer = setTimeout(async ()=>{
+      const { error } = await sb.from("settings").upsert({ key: "colOrder", value: colOrder });
+      if(error){
+        console.error("could not save column order to shared database", error);
+        banner.className = "sync-banner local";
+        banner.innerHTML = `<span class="dot"></span> Couldn't save column order — try moving it again.`;
+        return;
+      }
+      banner.className = "sync-banner live";
+      banner.innerHTML = `<span class="dot"></span> Column order saved — safe to refresh.`;
+      setTimeout(()=>{ banner.innerHTML = restoreHTML; banner.className = restoreClass; }, 2000);
+    }, 400);
   }
 
   async function syncColOrderFromRemote(){
