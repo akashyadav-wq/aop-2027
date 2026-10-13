@@ -1203,11 +1203,15 @@ const RAW_DATA = {"columns": [{"idx": 6, "group": "2025", "sub": "2025", "metric
       const chipTag = row.tag === "Tag" ? "TOT" : row.tag;
       // flag one campus's name in red, wherever it's showing as the campus (primary in
       // campus-view, secondary on a leaf row in program-view) — a one-off visual call-out,
-      // not a data change. Same idea, one specific program instead of a whole campus: ADYPU's
-      // BBA row, wherever its program name is showing (secondary in campus-view, primary in
-      // program-view — the one leaf row, not the BBA group header).
+      // not a data change. Same idea for a program name: ADYPU's BBA row specifically (a
+      // standing one-off request), plus any leaf whose 2027 Central or Regional Admissions
+      // is a literal 0 — a planned program with zero admissions is worth calling out, and
+      // this re-checks live (including overrides), not just the original import snapshot.
       const campusIsFlagged = kind !== "grand" && row.campus === "JECRC";
-      const programIsFlagged = kind === "leaf" && row.campus === "ADYPU" && row.program === "BBA";
+      const zero2027Admissions = kind === "leaf"
+        && (parseNum(effVal(row, "38")) === 0 || parseNum(effVal(row, "105")) === 0);
+      const programIsFlagged = (kind === "leaf" && row.campus === "ADYPU" && row.program === "BBA")
+        || zero2027Admissions;
       const primaryClass = (currentView === "campus" && campusIsFlagged) ? "campus-name flag-campus"
         : (currentView === "program" && programIsFlagged) ? "program-name flag-campus"
         : (currentView === "campus" ? "campus-name" : "program-name");
