@@ -1204,14 +1204,18 @@ const RAW_DATA = {"columns": [{"idx": 6, "group": "2025", "sub": "2025", "metric
       // flag one campus's name in red, wherever it's showing as the campus (primary in
       // campus-view, secondary on a leaf row in program-view) — a one-off visual call-out,
       // not a data change. Same idea for a program name: ADYPU's BBA row specifically (a
-      // standing one-off request), plus any leaf whose 2027 Central or Regional Admissions
-      // is a literal 0 — a planned program with zero admissions is worth calling out, and
-      // this re-checks live (including overrides), not just the original import snapshot.
+      // standing one-off request), plus any leaf that had real admissions in 2025 but shows
+      // 0 or blank in 2026 Projected — a program that was running and got discontinued.
+      // Checked live (effVal), so it tracks overrides and live-sheet-sync, not just the
+      // original import snapshot.
       const campusIsFlagged = kind !== "grand" && row.campus === "JECRC";
-      const zero2027Admissions = kind === "leaf"
-        && (parseNum(effVal(row, "38")) === 0 || parseNum(effVal(row, "105")) === 0);
+      const discontinuedIn2026 = kind === "leaf" && (()=>{
+        const adm2025 = parseNum(effVal(row, "6"));
+        const adm2026 = parseNum(effVal(row, "25"));
+        return adm2025 !== null && adm2025 > 0 && (adm2026 === null || adm2026 === 0);
+      })();
       const programIsFlagged = (kind === "leaf" && row.campus === "ADYPU" && row.program === "BBA")
-        || zero2027Admissions;
+        || discontinuedIn2026;
       const primaryClass = (currentView === "campus" && campusIsFlagged) ? "campus-name flag-campus"
         : (currentView === "program" && programIsFlagged) ? "program-name flag-campus"
         : (currentView === "campus" ? "campus-name" : "program-name");
