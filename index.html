@@ -574,7 +574,11 @@ const RAW_DATA = {"columns": [{"idx": 6, "group": "2025", "sub": "2025", "metric
   // 2027's cost section has no Sales-Staff-expense/Incentive breakout like 2026's (73/74),
   // so only its Sales & Marketing total (82) and Overall total (76) can be derived from
   // their own channel costs — Sales Staff CAC(79) has nothing to decompose from, stays editable
-  const FORCE_DERIVED = new Set([40, 44, 47, 50, 76, 82, 106]);
+  // 107 ("Markup from Central to Regional") has to be listed explicitly: isSummable()
+  // guesses from the label text (%, "Growth", "ARPU", …), and this column's label no longer
+  // contains any of those words since it was renamed from "% Growth (...)" — without this it
+  // silently gets treated as a blank editable input on every leaf row instead of computing.
+  const FORCE_DERIVED = new Set([40, 44, 47, 50, 76, 82, 106, 107]);
   // 2027 ARPU(42) is now a typed planning assumption (Revenue = Admissions × ARPU), not a
   // ratio derived from Revenue — but its label matches "ARPU" so isSummable() would
   // otherwise exclude it from being editable. Force it editable despite that.
@@ -613,6 +617,11 @@ const RAW_DATA = {"columns": [{"idx": 6, "group": "2025", "sub": "2025", "metric
     const rounded = Math.round(n*100)/100;
     const isInt = Math.abs(rounded - Math.round(rounded)) < 1e-9;
     return rounded.toLocaleString("en-US", isInt ? {maximumFractionDigits:0} : {minimumFractionDigits:2, maximumFractionDigits:2});
+  }
+  // revenue (Admissions x ARPU) always rounds to a whole number — ARPU's own decimals
+  // shouldn't carry through to the rupee amount
+  function formatWhole(n){
+    return Math.round(n).toLocaleString("en-US", {maximumFractionDigits:0});
   }
 
   function effVal(r, idx){
@@ -793,7 +802,7 @@ const RAW_DATA = {"columns": [{"idx": 6, "group": "2025", "sub": "2025", "metric
     }
     if(PRODUCT_FORMULAS[i]){
       const v = getNum(i);
-      return v !== null ? formatNum(v) : null;
+      return v !== null ? formatWhole(v) : null;
     }
     if(RATIO_FORMULAS[i]){
       const f = RATIO_FORMULAS[i];
