@@ -504,8 +504,8 @@ const RAW_DATA = {"columns": [{"idx": 6, "group": "2025", "sub": "2025", "metric
   const colKey = c => String(c.idx);
   const colByKey = new Map(COLUMNS.map(c => [colKey(c), c]));
   // display order, independent of COLUMNS' own array order — the ◀▶ buttons on each header
-  // swap a column with its nearest VISIBLE neighbor in this list; session-only, same as
-  // selectedCols/selectedRows (resets to the natural order on reload)
+  // swap a column with its nearest VISIBLE neighbor in this list. Shared across every
+  // device via Supabase (settings.colOrder), same mechanism as the cell overrides.
   let colOrder = COLUMNS.map(colKey);
   function moveColumn(key, dir){
     const i = colOrder.indexOf(key);
@@ -515,6 +515,16 @@ const RAW_DATA = {"columns": [{"idx": 6, "group": "2025", "sub": "2025", "metric
     if(j < 0 || j >= colOrder.length) return;
     [colOrder[i], colOrder[j]] = [colOrder[j], colOrder[i]];
     render();
+    persistColOrderRemote();
+  }
+  // a stored order can drift from COLUMNS over time (a column removed or added since it was
+  // last saved) — drop keys that no longer exist, append any that aren't in it yet, so a
+  // column never silently disappears or fails to show up
+  function reconcileColOrder(order){
+    const valid = order.filter(k => colByKey.has(k));
+    const have = new Set(valid);
+    COLUMNS.forEach(c=>{ const k = colKey(c); if(!have.has(k)) valid.push(k); });
+    return valid;
   }
 
   const LEAF_ROWS = ROWS.filter(r => r.program);               // true per-program rows
@@ -1397,6 +1407,22 @@ const RAW_DATA = {"columns": [{"idx": 6, "group": "2025", "sub": "2025", "metric
     banner.innerHTML = `<span class="dot"></span> Edits sync across every device — last loaded just now.`;
   }
 
+  async function persistColOrderRemote(){
+    if(!sb) return;
+    const { error } = await sb.from("settings").upsert({ key: "colOrder", value: colOrder });
+    if(error) console.error("could not save column order to shared database", error);
+  }
+
+  async function syncColOrderFromRemote(){
+    if(!sb) return;
+    const { data, error } = await sb.from("settings").select("value").eq("key", "colOrder").maybeSingle();
+    if(error){ console.error("could not load shared column order", error); return; }
+    if(data && Array.isArray(data.value)){
+      colOrder = reconcileColOrder(data.value);
+      render();
+    }
+  }
+
   (function initStorage(){
     overrides = loadOverrides();
     const banner = document.getElementById("syncBanner");
@@ -1578,6 +1604,7 @@ const RAW_DATA = {"columns": [{"idx": 6, "group": "2025", "sub": "2025", "metric
   }
   syncLiveSheet();
   syncOverridesFromRemote();
+  syncColOrderFromRemote();
 })();
 </script>
 
