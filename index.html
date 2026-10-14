@@ -177,6 +177,13 @@
   :root:not([data-theme="light"]) .view-btn.active{color:var(--accent);}
   :root[data-theme="dark"] .view-btn.active{color:var(--accent);}
 
+  .sage-toggle{
+    display:flex; align-items:center; gap:7px; font-size:12px; font-weight:700; color:var(--text-dim);
+    background:var(--surface-2); border:1px solid var(--border); border-radius:9px; padding:8px 12px;
+    cursor:pointer; user-select:none;
+  }
+  .sage-toggle input{accent-color:var(--accent); width:14px; height:14px;}
+
   /* ---------- sync banner ---------- */
   .sync-banner{
     display:flex; align-items:center; gap:8px; font-size:11.5px; color:var(--text-dim);
@@ -419,6 +426,10 @@
         <button class="view-btn" data-tag="AL" role="tab" aria-selected="false">AL</button>
         <button class="view-btn" data-tag="CCM" role="tab" aria-selected="false">CCM</button>
       </div>
+      <label class="sage-toggle" title="Uncheck to hide SAGE Exclusive and drop it from Total Sunstone">
+        <input type="checkbox" id="sageExclusiveToggle" checked>
+        SAGE Exclusive
+      </label>
       <div class="stat-pills">
         <div class="pill"><b id="statCampuses">–</b><span>Campuses</span></div>
         <div class="pill"><b id="statPrograms">–</b><span>Programs</span></div>
@@ -533,6 +544,7 @@ const RAW_DATA = {"columns": [{"idx": 6, "group": "2025", "sub": "2025", "metric
 
   let currentView = "campus"; // "campus" | "program"
   let currentTagFilter = "all"; // "all" | "AL" | "CCM" — which the grand total rolls up over
+  let includeSageExclusive = true; // unchecked: hides the SAGE Exclusive row and drops it from Total Sunstone
   let collapsedGroups = new Set(); // campus names (campus view) or program names (program view) currently collapsed
 
   // every row selected by default — Customize narrows the view, it never hides data from the totals
@@ -667,7 +679,8 @@ const RAW_DATA = {"columns": [{"idx": 6, "group": "2025", "sub": "2025", "metric
     // unlike campus/program totals (always "everything"), the grand total follows the AL/CCM
     // quick filter — that filter is a scope switch (show me only AL, only CCM), not a generic
     // row pick-list, so "Total Sunstone" should mean "total of what's on screen" here
-    const leaves = currentTagFilter === "all" ? LEAF_ROWS : LEAF_ROWS.filter(r => r.tag === currentTagFilter);
+    let leaves = currentTagFilter === "all" ? LEAF_ROWS : LEAF_ROWS.filter(r => r.tag === currentTagFilter);
+    if(!includeSageExclusive) leaves = leaves.filter(r => r.campus !== "SAGE Exclusive");
     const label = currentTagFilter === "all" ? "Total Sunstone" : `Total Sunstone (${currentTagFilter})`;
     return {tag:"Tag", campus:label, program:"", isTotal:true, isGrand:true, baseRow: GRAND_ROW, _leaves: leaves};
   }
@@ -1119,6 +1132,7 @@ const RAW_DATA = {"columns": [{"idx": 6, "group": "2025", "sub": "2025", "metric
       const seen = new Set();
       ROWS.forEach(r=>{ if(r.campus !== "Total Sunstone" && !seen.has(r.campus)){ seen.add(r.campus); campusesInOrder.push(r.campus); } });
       campusesInOrder.forEach(campus=>{
+        if(campus === "SAGE Exclusive" && !includeSageExclusive) return;
         const leaves = LEAF_ROWS.filter(r => r.campus === campus && selectedRows.has(rowKey(r)));
         const totSelected = selectedRows.has(campus + "␟");
         if(!totSelected && !leaves.length) return;
@@ -1128,6 +1142,7 @@ const RAW_DATA = {"columns": [{"idx": 6, "group": "2025", "sub": "2025", "metric
       });
     } else {
       PROGRAM_NAMES.forEach(program=>{
+        if(program === "SAGE Exclusive" && !includeSageExclusive) return;
         const leaves = LEAF_ROWS.filter(r => r.program === program && selectedRows.has(rowKey(r)));
         if(!leaves.length) return;
         const isCollapsed = collapsedGroups.has(program);
@@ -1500,7 +1515,7 @@ const RAW_DATA = {"columns": [{"idx": 6, "group": "2025", "sub": "2025", "metric
     banner.innerHTML = `<span class="dot"></span> Saving filters…`;
     filterSaveTimer = setTimeout(async ()=>{
       const value = {
-        currentView, currentTagFilter,
+        currentView, currentTagFilter, includeSageExclusive,
         selectedRows: [...selectedRows],
         selectedCols: [...selectedCols],
       };
@@ -1538,6 +1553,10 @@ const RAW_DATA = {"columns": [{"idx": 6, "group": "2025", "sub": "2025", "metric
     if(typeof f.currentTagFilter === "string"){
       currentTagFilter = f.currentTagFilter;
       setActiveButton(document.getElementById("tagSwitch"), b => b.dataset.tag === currentTagFilter);
+    }
+    if(typeof f.includeSageExclusive === "boolean"){
+      includeSageExclusive = f.includeSageExclusive;
+      document.getElementById("sageExclusiveToggle").checked = includeSageExclusive;
     }
     const allRowKeys = new Set(ROWS.map(rowKey));
     const allColKeys = new Set(COLUMNS.map(colKey));
@@ -1586,6 +1605,12 @@ const RAW_DATA = {"columns": [{"idx": 6, "group": "2025", "sub": "2025", "metric
       render();
       persistFiltersRemote();
     });
+  });
+
+  document.getElementById("sageExclusiveToggle").addEventListener("change", e=>{
+    includeSageExclusive = e.target.checked;
+    render();
+    persistFiltersRemote();
   });
 
   // ---------- drawer wiring ----------
