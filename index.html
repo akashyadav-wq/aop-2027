@@ -1236,6 +1236,7 @@ const RAW_DATA = {"columns": [{"idx": 6, "group": "2025", "sub": "2025", "metric
         return adm2025 !== null && adm2025 > 0 && (adm2026 === null || adm2026 === 0);
       })();
       const programIsFlagged = (kind === "leaf" && row.campus === "ADYPU" && row.program === "BBA")
+        || (kind === "leaf" && row.campus === "VGUJ" && row.program === "MBA")
         || discontinuedIn2026;
       const primaryClass = (currentView === "campus" && campusIsFlagged) ? "campus-name flag-campus"
         : (currentView === "program" && programIsFlagged) ? "program-name flag-campus"
