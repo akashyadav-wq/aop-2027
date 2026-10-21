@@ -430,6 +430,10 @@
         <input type="checkbox" id="sageExclusiveToggle" checked>
         SAGE Exclusive
       </label>
+      <div class="view-switch" role="group" aria-label="Collapse or expand all total rows">
+        <button class="view-btn" id="collapseAllBtn">Collapse all</button>
+        <button class="view-btn" id="expandAllBtn">Expand all</button>
+      </div>
       <div class="stat-pills">
         <div class="pill"><b id="statCampuses">–</b><span>Campuses</span></div>
         <div class="pill"><b id="statPrograms">–</b><span>Programs</span></div>
@@ -1345,6 +1349,33 @@ const RAW_DATA = {"columns": [{"idx": 6, "group": "2025", "sub": "2025", "metric
     const td = e.target.closest("td.editable");
     if(!td || td.classList.contains("editing")) return;
     startEdit(td);
+  });
+
+  // collapse/expand every total row's group at once, instead of clicking each ▸ one by one.
+  // "collapsible" mirrors buildBodyEntries' own test for which groups actually have a
+  // toggle at all (a campus with no leaf rows selected has nothing to collapse)
+  function groupKeysForCurrentView(){
+    if(currentView === "campus"){
+      const campusesInOrder = [];
+      const seen = new Set();
+      ROWS.forEach(r=>{ if(r.campus !== "Total Sunstone" && !seen.has(r.campus)){ seen.add(r.campus); campusesInOrder.push(r.campus); } });
+      return campusesInOrder.filter(campus=>{
+        if(campus === "SAGE Exclusive" && !includeSageExclusive) return false;
+        return LEAF_ROWS.some(r => r.campus === campus && selectedRows.has(rowKey(r)));
+      });
+    }
+    return PROGRAM_NAMES.filter(program=>{
+      if(program === "SAGE Exclusive" && !includeSageExclusive) return false;
+      return LEAF_ROWS.some(r => r.program === program && selectedRows.has(rowKey(r)));
+    });
+  }
+  document.getElementById("collapseAllBtn").addEventListener("click", ()=>{
+    groupKeysForCurrentView().forEach(k => collapsedGroups.add(k));
+    render();
+  });
+  document.getElementById("expandAllBtn").addEventListener("click", ()=>{
+    collapsedGroups.clear();
+    render();
   });
 
   function startEdit(td){
