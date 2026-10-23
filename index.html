@@ -519,7 +519,6 @@ const RAW_DATA = {"columns": [{"idx": 6, "group": "2025", "sub": "2025", "metric
   const COLUMNS = RAW_DATA.columns;       // [{idx, group, sub, metric, label}]
   const ROWS = RAW_DATA.rows;             // [{tag, campus, program, isTotal, isGrand, v:{idx:value}}]
 
-  const DEFAULT_GROUPS = new Set(["2025","2026 Current","2026 Projected","2027"]);
 
   const rowKey = r => r.campus + "␟" + r.program;
   const colKey = c => String(c.idx);
@@ -559,15 +558,18 @@ const RAW_DATA = {"columns": [{"idx": 6, "group": "2025", "sub": "2025", "metric
 
   // 2026 Projected admissions/revenue/growth/ARPU, and the equivalent 2027 Central/Regional
   // set — always shown in the table, can't be unchecked in Customize
-  const ALWAYS_ON_COLS = new Set([30, 33, 34, 35, 38, 105, 40, 106, 107, 104, 41, 42]);
+  const ALWAYS_ON_COLS = new Set([30, 33, 34, 35, 38, 105, 40, 106, 107, 41, 42]);
   function ensureAlwaysOnCols(set){
     ALWAYS_ON_COLS.forEach(idx => set.add(String(idx)));
     return set;
   }
+  // the starting selection on first load: every always-on column, plus three 2025 figures
+  // (In-Class, RTC Revenue, ARPU) that are default-checked but can still be unchecked
+  const DEFAULT_SELECTED_COLS = ensureAlwaysOnCols(new Set([10, 13, 16].map(String)));
 
   // every row selected by default — Customize narrows the view, it never hides data from the totals
   let selectedRows = new Set(ROWS.map(rowKey));
-  let selectedCols = ensureAlwaysOnCols(new Set(COLUMNS.filter(c => DEFAULT_GROUPS.has(c.group)).map(colKey)));
+  let selectedCols = new Set(DEFAULT_SELECTED_COLS);
 
   // draft state edited inside the drawer, committed on Apply
   let draftRows = new Set(selectedRows);
