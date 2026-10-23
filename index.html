@@ -391,12 +391,6 @@
   .chk-row input{accent-color:var(--accent); width:14px; height:14px; flex:none;}
   .chk-row label{flex:1; cursor:pointer; display:flex; align-items:center; gap:9px;}
   .chk-row.nested label{color:var(--text-dim);}
-  .chk-row input:disabled{cursor:not-allowed; opacity:.7;}
-  .always-on-tag{
-    font-size:9.5px; font-weight:700; letter-spacing:.04em; text-transform:uppercase;
-    color:var(--text-faint); background:var(--surface-2); border:1px solid var(--border);
-    border-radius:5px; padding:1px 6px;
-  }
 
   .drawer-foot{
     border-top:1px solid var(--border); padding:12px 18px; display:flex; justify-content:space-between; align-items:center; gap:10px;
@@ -556,16 +550,10 @@ const RAW_DATA = {"columns": [{"idx": 6, "group": "2025", "sub": "2025", "metric
   let includeSageExclusive = true; // unchecked: hides the SAGE Exclusive row and drops it from Total Sunstone
   let collapsedGroups = new Set(); // campus names (campus view) or program names (program view) currently collapsed
 
-  // 2026 Projected admissions/revenue/growth/ARPU, and the equivalent 2027 Central/Regional
-  // set — always shown in the table, can't be unchecked in Customize
-  const ALWAYS_ON_COLS = new Set([30, 33, 34, 35, 38, 105, 40, 106, 107, 41, 42]);
-  function ensureAlwaysOnCols(set){
-    ALWAYS_ON_COLS.forEach(idx => set.add(String(idx)));
-    return set;
-  }
-  // the starting selection on first load: every always-on column, plus three 2025 figures
-  // (In-Class, RTC Revenue, ARPU) that are default-checked but can still be unchecked
-  const DEFAULT_SELECTED_COLS = ensureAlwaysOnCols(new Set([10, 13, 16].map(String)));
+  // starting column selection on first load — 2026 Projected admissions/revenue/growth/ARPU,
+  // the equivalent 2027 Central/Regional set, and three 2025 figures (In-Class, RTC Revenue,
+  // ARPU). Default-checked only — every one of these can still be unchecked in Customize.
+  const DEFAULT_SELECTED_COLS = new Set([10, 13, 16, 30, 33, 34, 35, 38, 105, 40, 106, 107, 41, 42].map(String));
 
   // every row selected by default — Customize narrows the view, it never hides data from the totals
   let selectedRows = new Set(ROWS.map(rowKey));
@@ -1101,8 +1089,7 @@ const RAW_DATA = {"columns": [{"idx": 6, "group": "2025", "sub": "2025", "metric
         const row = document.createElement("div");
         row.className = "chk-row nested";
         const niceLabel = c.label.split(" | ").slice(1).join(" — ") || c.label;
-        const alwaysOn = ALWAYS_ON_COLS.has(c.idx);
-        row.innerHTML = `<label><input type="checkbox" data-col="${colKey(c)}" ${draftCols.has(colKey(c)) || alwaysOn ? "checked" : ""} ${alwaysOn ? "disabled" : ""}>${niceLabel}${alwaysOn ? ' <span class="always-on-tag">always on</span>' : ""}</label>`;
+        row.innerHTML = `<label><input type="checkbox" data-col="${colKey(c)}" ${draftCols.has(colKey(c))?"checked":""}>${niceLabel}</label>`;
         items.appendChild(row);
       });
 
@@ -1128,7 +1115,6 @@ const RAW_DATA = {"columns": [{"idx": 6, "group": "2025", "sub": "2025", "metric
 
   function toggleDraftCol(key, on){
     if(!key) return;
-    if(!on && ALWAYS_ON_COLS.has(Number(key))) return; // can't be turned off
     if(on) draftCols.add(key); else draftCols.delete(key);
     updateSelInfo();
   }
@@ -1625,10 +1611,9 @@ const RAW_DATA = {"columns": [{"idx": 6, "group": "2025", "sub": "2025", "metric
       });
     }
     if(Array.isArray(f.selectedCols)){
-      // unlike rows, a column missing from the saved set is NOT auto-re-added in general —
-      // that would silently undo a deliberate uncheck in Customize every time the page loads.
-      // ensureAlwaysOnCols still forces in the handful of columns that must never be hidden.
-      selectedCols = ensureAlwaysOnCols(new Set(f.selectedCols.filter(k => allColKeys.has(k))));
+      // unlike rows, a column missing from the saved set is NOT auto-re-added — that would
+      // silently undo a deliberate uncheck in Customize every time the page loads.
+      selectedCols = new Set(f.selectedCols.filter(k => allColKeys.has(k)));
     }
     draftRows = new Set(selectedRows);
     draftCols = new Set(selectedCols);
@@ -1721,13 +1706,12 @@ const RAW_DATA = {"columns": [{"idx": 6, "group": "2025", "sub": "2025", "metric
   });
   document.getElementById("colsNone").addEventListener("click", ()=>{
     draftCols.clear();
-    ensureAlwaysOnCols(draftCols);
     renderColsList(document.getElementById("searchCols").value);
   });
 
   document.getElementById("applyBtn").addEventListener("click", ()=>{
     selectedRows = new Set(draftRows);
-    selectedCols = ensureAlwaysOnCols(new Set(draftCols));
+    selectedCols = new Set(draftCols);
     render();
     closeDrawer();
     persistFiltersRemote();
