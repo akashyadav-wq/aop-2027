@@ -550,10 +550,10 @@ const RAW_DATA = {"columns": [{"idx": 6, "group": "2025", "sub": "2025", "metric
   let includeSageExclusive = true; // unchecked: hides the SAGE Exclusive row and drops it from Total Sunstone
   let collapsedGroups = new Set(); // campus names (campus view) or program names (program view) currently collapsed
 
-  // starting column selection on first load — 2026 Projected admissions/revenue/growth/ARPU,
-  // the equivalent 2027 Central/Regional set, and three 2025 figures (In-Class, RTC Revenue,
-  // ARPU). Default-checked only — every one of these can still be unchecked in Customize.
-  const DEFAULT_SELECTED_COLS = new Set([10, 13, 16, 30, 33, 34, 35, 38, 105, 40, 106, 107, 41, 42].map(String));
+  // starting column selection on first load — every 2025, 2026 Projected, and 2027 column.
+  // Default-checked only, same as any other column — nothing here is locked or forced.
+  const DEFAULT_GROUPS = new Set(["2025", "2026 Projected", "2027"]);
+  const DEFAULT_SELECTED_COLS = new Set(COLUMNS.filter(c => DEFAULT_GROUPS.has(c.group)).map(colKey));
 
   // every row selected by default — Customize narrows the view, it never hides data from the totals
   let selectedRows = new Set(ROWS.map(rowKey));
